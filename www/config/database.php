@@ -5,7 +5,6 @@ define('DB_USER', 'okelo');
 define('DB_PASS', 'kothbiro');
 define('DB_NAME', 'judging_system');
 
-
 class Database {
     private $connection;
     
@@ -72,11 +71,10 @@ class Database {
         );
     }
     
-    // Add or update score
+    // Add new score 
     public function addScore($judge_id, $user_id, $points) {
         return $this->query(
-            "INSERT INTO scores (judge_id, user_id, points) VALUES (?, ?, ?) 
-             ON DUPLICATE KEY UPDATE points = VALUES(points), updated_at = CURRENT_TIMESTAMP",
+            "INSERT INTO scores (judge_id, user_id, points) VALUES (?, ?, ?)",
             [$judge_id, $user_id, $points]
         );
     }
@@ -88,9 +86,10 @@ class Database {
              FROM scores s 
              JOIN users u ON s.user_id = u.id 
              WHERE s.judge_id = ? 
-             ORDER BY u.display_name",
+             ORDER BY s.created_at DESC, u.display_name",
             [$judge_id]
         )->fetchAll();
     }
+    
 }
 ?>
