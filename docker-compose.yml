@@ -15,7 +15,7 @@ services:
       - lamp-network
 
   db:
-    image: mysql:8.0
+    image: mysql
     restart: always
     environment:
       MYSQL_ROOT_PASSWORD: rootpassword
