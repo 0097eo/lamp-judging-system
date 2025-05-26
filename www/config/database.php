@@ -25,12 +25,11 @@ class Database {
                     PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
                     PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
                     PDO::ATTR_EMULATE_PREPARES => false,
-                    PDO::ATTR_TIMEOUT => 10,
-                    PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT => false
+                    PDO::ATTR_TIMEOUT => 10, 
+                    PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT => false // For Railway SSL
                 ]
             );
             
-
             $this->connection->exec("SET time_zone = '+03:00'");
             
         } catch (PDOException $e) {
@@ -55,61 +54,99 @@ class Database {
         }
     }
     
-    // Initialize database tables if they don't exist
+    // Initialize database tables from init.sql file
     public function initializeTables() {
         try {
-            // Create judges table
-            $this->connection->exec("
-                CREATE TABLE IF NOT EXISTS judges (
-                    id INT AUTO_INCREMENT PRIMARY KEY,
-                    username VARCHAR(50) UNIQUE NOT NULL,
-                    display_name VARCHAR(100) NOT NULL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            ");
+            // Check if tables already exist to avoid re-running initialization
+            $tables_exist = $this->checkTablesExist();
+            if ($tables_exist) {
+                return; 
+            }
             
-            // Create users table
-            $this->connection->exec("
-                CREATE TABLE IF NOT EXISTS users (
-                    id INT AUTO_INCREMENT PRIMARY KEY,
-                    username VARCHAR(50) UNIQUE NOT NULL,
-                    display_name VARCHAR(100) NOT NULL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            ");
+            $init_sql_paths = [
+                __DIR__ . '/../../mysql/init.sql',
+                __DIR__ . '/../mysql/init.sql',
+                $_SERVER['DOCUMENT_ROOT'] . '/../mysql/init.sql',
+                '/var/www/mysql/init.sql'
+            ];
             
-            // Create scores table
-            $this->connection->exec("
-                CREATE TABLE IF NOT EXISTS scores (
-                    id INT AUTO_INCREMENT PRIMARY KEY,
-                    judge_id INT NOT NULL,
-                    user_id INT NOT NULL,
-                    points INT NOT NULL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (judge_id) REFERENCES judges(id) ON DELETE CASCADE,
-                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-                    UNIQUE KEY unique_judge_user (judge_id, user_id)
-                )
-            ");
+            $init_sql_content = null;
+            $used_path = null;
             
-            // Create scoreboard view
-            $this->connection->exec("
-                CREATE OR REPLACE VIEW scoreboard AS
-                SELECT 
-                    u.id as user_id,
-                    u.display_name as user_name,
-                    COALESCE(SUM(s.points), 0) as total_points,
-                    COUNT(s.id) as total_scores
-                FROM users u
-                LEFT JOIN scores s ON u.id = s.user_id
-                GROUP BY u.id, u.display_name
-                ORDER BY total_points DESC
-            ");
+            foreach ($init_sql_paths as $path) {
+                if (file_exists($path) && is_readable($path)) {
+                    $init_sql_content = file_get_contents($path);
+                    $used_path = $path;
+                    break;
+                }
+            }
             
-        } catch (PDOException $e) {
+            if (!$init_sql_content) {
+                error_log("init.sql file not found in any of the expected locations");
+                throw new Exception("Database initialization file (init.sql) not found");
+            }
+            
+            error_log("Using init.sql from: " . $used_path);
+            
+            $statements = $this->splitSqlStatements($init_sql_content);
+            
+            foreach ($statements as $statement) {
+                $statement = trim($statement);
+                if (!empty($statement)) {
+                    $this->connection->exec($statement);
+                }
+            }
+            
+            error_log("Database tables initialized successfully from init.sql");
+            
+        } catch (Exception $e) {
             error_log("Table initialization failed: " . $e->getMessage());
             throw $e;
         }
+    }
+    
+    private function checkTablesExist() {
+        try {
+            $result = $this->query("SHOW TABLES LIKE 'judges'")->fetch();
+            return !empty($result);
+        } catch (PDOException $e) {
+            return false;
+        }
+    }
+    
+    private function splitSqlStatements($sql) {
+        $sql = preg_replace('/--.*$/m', '', $sql);
+        $sql = preg_replace('/\/\*.*?\*\//s', '', $sql);
+        $statements = [];
+        $current_statement = '';
+        $in_string = false;
+        $string_char = null;
+        
+        for ($i = 0; $i < strlen($sql); $i++) {
+            $char = $sql[$i];
+            
+            if (!$in_string && ($char === '"' || $char === "'")) {
+                $in_string = true;
+                $string_char = $char;
+            } elseif ($in_string && $char === $string_char) {
+                if ($i > 0 && $sql[$i-1] !== '\\') {
+                    $in_string = false;
+                    $string_char = null;
+                }
+            } elseif (!$in_string && $char === ';') {
+                $statements[] = $current_statement;
+                $current_statement = '';
+                continue;
+            }
+            
+            $current_statement .= $char;
+        }
+        
+        if (trim($current_statement)) {
+            $statements[] = $current_statement;
+        }
+        
+        return $statements;
     }
     
     // Get all judges

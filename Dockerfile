@@ -13,6 +13,7 @@ RUN apt-get update && apt-get install -y \
 WORKDIR  /var/www/html
 
 COPY www/ /var/www/html/
+COPY mysql/ /var/www/mysql/
 
 RUN chown -R www-data:www-data /var/www/html/ \
     && chmod -R 755 /var/www/html/ \
