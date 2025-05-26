@@ -1,9 +1,21 @@
 <?php
-define('DB_HOST', $_ENV['MYSQLHOST'] ?? 'localhost');
-define('DB_USER', $_ENV['MYSQLUSER'] ?? 'okelo');
-define('DB_PASS', $_ENV['MYSQLPASSWORD'] ?? 'kothbiro');
-define('DB_NAME', $_ENV['MYSQLDATABASE'] ?? 'judging_system');
-define('DB_PORT', $_ENV['MYSQLPORT'] ?? 3306);
+
+$mysql_url = $_ENV['MYSQL_URL'] ?? null;
+
+if ($mysql_url) {
+    $parsed = parse_url($mysql_url);
+    define('DB_HOST', $parsed['host']);
+    define('DB_USER', $parsed['user']);
+    define('DB_PASS', $parsed['pass']);
+    define('DB_NAME', ltrim($parsed['path'], '/'));
+    define('DB_PORT', $parsed['port'] ?? 3306);
+} else {
+    define('DB_HOST', $_ENV['MYSQLHOST'] ?? 'localhost');
+    define('DB_USER', $_ENV['MYSQLUSER'] ?? 'okelo');
+    define('DB_PASS', $_ENV['MYSQLPASSWORD'] ?? 'kothbiro');
+    define('DB_NAME', $_ENV['MYSQLDATABASE'] ?? 'judging_system');
+    define('DB_PORT', $_ENV['MYSQLPORT'] ?? 3306);
+}
 
 class Database {
     private $connection;
@@ -25,17 +37,30 @@ class Database {
                     PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
                     PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
                     PDO::ATTR_EMULATE_PREPARES => false,
-                    PDO::ATTR_TIMEOUT => 10, 
-                    PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT => false // For Railway SSL
+                    PDO::ATTR_TIMEOUT => 30,
+                    PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT => false
                 ]
             );
             
             $this->connection->exec("SET time_zone = '+03:00'");
             
         } catch (PDOException $e) {
-            // Log error details for debugging
+            // Debug information
+            $debug_info = [
+                'Host' => DB_HOST,
+                'User' => DB_USER,
+                'Database' => DB_NAME,
+                'Port' => DB_PORT,
+                'DSN' => $dsn ?? 'Not set',
+                'Error' => $e->getMessage(),
+                'Available Environment Variables' => array_keys($_ENV)
+            ];
+            
+            echo "<h3>Database Connection Debug Info:</h3>";
+            echo "<pre>" . print_r($debug_info, true) . "</pre>";
+            
             error_log("Database connection failed: " . $e->getMessage());
-            die("Connection failed. Please check database configuration.");
+            die("Connection failed. Check debug info above.");
         }
     }
     
