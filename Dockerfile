@@ -10,9 +10,21 @@ RUN apt-get update && apt-get install -y \
     unzip \
     && docker-php-ext-install zip
 
-WORKDIR www/ /var/www/html
+WORKDIR  /var/www/html
 
-COPY . .
+COPY www/ /var/www/html/
+
+RUN chown -R www-data:www-data /var/www/html/ \
+    && chmod -R 755 /var/www/html/ \
+    && chmod -R 644 /var/www/html/*.php \
+    && find /var/www/html -type d -exec chmod 755 {} \;
+
+RUN echo '<Directory "/var/www/html">\n\
+    Options Indexes FollowSymLinks\n\
+    AllowOverride All\n\
+    Require all granted\n\
+</Directory>' > /etc/apache2/conf-available/app.conf \
+    && a2enconf app
 
 EXPOSE 80
 
