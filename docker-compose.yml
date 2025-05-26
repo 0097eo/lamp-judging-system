@@ -25,7 +25,7 @@ services:
     ports:
       - "3306:3306"
     volumes:
-      - ./mysql/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./mysql/init.sql:/docker-entrypoint.sh mysqld --innodb-use-native-aio=0 --disable-log-bin --performance_schema=0/init.sql
       - mysql_data:/var/lib/mysql
     networks:
       - lamp-network
