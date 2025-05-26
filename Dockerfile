@@ -10,7 +10,7 @@ RUN apt-get update && apt-get install -y \
     unzip \
     && docker-php-ext-install zip
 
-WORKDIR /var/www/html
+WORKDIR www/ /var/www/html
 
 COPY . .
 
